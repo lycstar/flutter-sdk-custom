@@ -34,8 +34,13 @@ jobs:
                       /usr/lib/jvm || true
           sudo docker image prune --all --force 2>/dev/null || true
           df -h /
+      - name: 宿主系统库(引擎 linux 嵌入层的链接依赖)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfontconfig1-dev libglib2.0-dev \
+            libgtk-3-dev libx11-dev liblzma-dev
       - name: 宿主依赖
-        run: bash linux-setup.sh   # 首跑需校准: 脚本当前面向 Ubuntu 本机编写
+        run: bash linux-setup.sh
       - name: 宿主工具(NDK + depot_tools)
         run: |
           ndk_ver="$(grep -oE 'android-ndk-r[0-9]+[a-z]*' linux-setup.sh | head -n1)"
