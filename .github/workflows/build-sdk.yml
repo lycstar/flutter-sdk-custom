@@ -25,6 +25,8 @@ jobs:
           cp "versions/${{ inputs.version }}/build.toml" build.toml
           gclient_file="$(grep -oE "gclient = '[^']+'" build.toml | sed "s/gclient = '//;s/'//")"
           cp "versions/${{ inputs.version }}/$(basename "$gclient_file")" "$gclient_file"
+          rm -rf patches
+          cp -R "versions/${{ inputs.version }}/patches" patches
       - name: 释放磁盘(引擎构建 ~40G)
         run: |
           sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android \
