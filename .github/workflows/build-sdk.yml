@@ -1,0 +1,49 @@
+name: Build Flutter SDK (aarch64 android)
+# 实验性: 免费 runner 编 engine 约 6h 起, 宿主脚本需首跑校准;
+# 未跑通前现役路径 = Ubuntu 本机(见 README)。
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Flutter 版本(如 3.47.7)"
+        required: true
+        default: "3.47.7"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v4
+      - name: 释放磁盘(引擎构建 ~40G)
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android \
+                      /opt/hostedtoolcache/CodeQL /usr/local/share/boost \
+                      /usr/lib/jvm || true
+          sudo docker image prune --all --force 2>/dev/null || true
+          df -h /
+      - name: 宿主依赖
+        run: bash linux-setup.sh   # TODO 首跑校准: 脚本当前面向 Ubuntu 本机
+      - name: 宿主工具(NDK r27c + depot_tools)
+        run: |
+          mkdir -p "$HOME/ndk"
+          curl -sfL --retry 3 -o /tmp/ndk.zip \
+            https://dl.google.com/android/repository/android-ndk-r27c-linux.zip
+          unzip -q /tmp/ndk.zip -d "$HOME/ndk"
+          git clone -q --depth 1 \
+            https://chromium.googlesource.com/chromium/tools/depot_tools.git \
+            "$HOME/depot_tools"
+      - name: 构建(clone→sync→patch→sysroot→gn→ninja)
+        run: bash linux-run.sh
+      - name: 打包
+        run: python3 package.py --version "${{ inputs.version }}"   # TODO 对齐 package.py 实参
+      - name: Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: "${{ inputs.version }}"
+          artifacts: "flutter-*-${{ inputs.version }}.tar.xz"
+          allowUpdates: true
+          replacesArtifacts: true
