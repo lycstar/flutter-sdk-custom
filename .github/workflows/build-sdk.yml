@@ -42,6 +42,12 @@ jobs:
           echo "linux-setup.sh 约定的 NDK: ${ndk_ver:-见脚本}"
       - name: 构建(clone→sync→patch→sysroot→gn→ninja)
         run: bash linux-run.sh
+      - name: 诊断(sysroot 状态)
+        if: failure()
+        run: |
+          echo "== sysroot/ 顶层 =="; ls -la sysroot/ 2>/dev/null || echo "(不存在)"
+          echo "== libfontconfig =="; find sysroot -name 'libfontconfig*' -ls 2>/dev/null | head -3 || true
+          echo "== usr 链接 =="; ls -la sysroot/data/data/com.termux/files/usr/lib 2>/dev/null | head -5 || true
       - name: 打包
         run: python3 package.py
       - name: Release
