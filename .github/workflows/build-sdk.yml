@@ -1,0 +1,76 @@
+name: Build Flutter SDK (aarch64 android)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Flutter version (must exist under versions/<version>/)"
+        required: true
+        default: "3.47.7"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Materialise the version directory
+        run: |
+          test -d "versions/${{ inputs.version }}" || {
+            echo "versions/${{ inputs.version }} does not exist; create it and re-base the patches first" >&2
+            exit 1
+          }
+          cp "versions/${{ inputs.version }}/build.toml" build.toml
+          gclient_file="$(grep -oE "gclient = '[^']+'" build.toml | sed "s/gclient = '//;s/'//")"
+          cp "versions/${{ inputs.version }}/$(basename "$gclient_file")" "$gclient_file"
+          rm -rf patches
+          cp -R "versions/${{ inputs.version }}/patches" patches
+
+      - name: Free disk space (engine build ~40G)
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android \
+                      /opt/hostedtoolcache/CodeQL /usr/local/share/boost \
+                      /usr/lib/jvm || true
+          sudo docker image prune --all --force 2>/dev/null || true
+          df -h /
+
+      - name: Host system libraries (engine linux embedder link deps)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfontconfig1-dev libglib2.0-dev \
+            libgtk-3-dev libx11-dev liblzma-dev
+
+      - name: Host toolchain (pip deps, NDK r27c, depot_tools)
+        run: bash linux-setup.sh
+
+      - name: Build (clone → sync → patch → sysroot → gn → ninja → deb)
+        run: bash linux-run.sh
+
+      - name: Dump sysroot state on failure
+        if: failure()
+        run: |
+          echo "== sysroot/ top level =="; ls -la sysroot/ 2>/dev/null || echo "(missing)"
+          echo "== libfontconfig =="; find sysroot -name 'libfontconfig*' 2>/dev/null | head -3 || true
+          echo "== usr/lib sample =="; ls -la sysroot/data/data/com.termux/files/usr/lib 2>/dev/null | head -5 || true
+
+      - name: Convert the built .deb into the distribution tarball
+        run: |
+          deb="$(ls "$HOME/ftb"/*.deb | head -n1)"
+          test -n "$deb" || { echo "no .deb produced by the build" >&2; exit 1; }
+          rm -rf /tmp/pkg && mkdir -p /tmp/pkg && cd /tmp/pkg
+          ar x "$deb"
+          tar -xf data.tar.*
+          cd data/data/com.termux/files/usr/opt
+          tar -cJf "$GITHUB_WORKSPACE/flutter-${{ inputs.version }}-aarch64-linux-android.tar.xz" flutter
+
+      - name: Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: "${{ inputs.version }}"
+          artifacts: "flutter-${{ inputs.version }}-aarch64-linux-android.tar.xz"
+          allowUpdates: true
+          replacesArtifacts: true
