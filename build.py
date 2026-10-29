@@ -146,6 +146,7 @@ class Build:
         root: str = None,
         sysroot: str = None,
         toolchain: str = None,
+        android_aot: bool = False,
     ):
         api = api or self.api
         root = root or self.root
@@ -154,8 +155,8 @@ class Build:
         cmd = [
             'vpython3',
             'engine/src/flutter/tools/gn',
-            '--linux',
-            '--linux-cpu', arch,
+            '--android' if android_aot else '--linux',
+            '--android-cpu' if android_aot else '--linux-cpu', arch,
             '--enable-fontconfig',
             '--no-goma',
             '--no-backtrace',
@@ -181,6 +182,34 @@ class Build:
             '--gn-args', f'termux_api_level={api}',
         ]
         subprocess.run(cmd, cwd=root, check=True, stdout=True, stderr=True)
+
+    def build_android_aot(self, arch: str, mode: str):
+        if arch != 'arm64' or mode not in ('profile', 'release'):
+            raise ValueError('Android AOT distribution supports arm64 profile/release only')
+        # GN also loads Android toolchain metadata; Android dependency downloads
+        # are disabled in gclient, so expose the configured NDK at its expected path.
+        android_config = self.root / 'engine/src/build/config/android/config.gni'
+        import re
+        match = re.search(r'android_ndk_version = "([^"]+)"', android_config.read_text())
+        if match is None:
+            raise RuntimeError('Cannot determine the engine Android NDK path')
+        ndk_link = self.root / 'engine/src/flutter/third_party/android_tools/sdk/ndk' / match[1]
+        ndk_link.parent.mkdir(parents=True, exist_ok=True)
+        if not ndk_link.exists():
+            ndk_link.symlink_to(self.toolchain.parents[3], target_is_directory=True)
+        self.configure(arch=arch, mode=mode, android_aot=True)
+        output = self.root / 'engine/src/out' / f'android_{mode}_{arch}'
+        # Build with the default Termux toolchain, not the Linux x64 host toolchain.
+        # target_os=android gives Dart the Android target ABI; is_termux keeps
+        # the executable itself compatible with Android bionic.
+        subprocess.run(['ninja', '-C', str(output),
+                        'gen_snapshot'], check=True)
+        commands = subprocess.check_output(
+            ['ninja', '-C', str(output), '-t', 'commands', 'gen_snapshot'], text=True)
+        if 'DART_TARGET_OS_ANDROID' not in commands or '--target=aarch64-linux-android' not in commands:
+            raise RuntimeError('gen_snapshot must use Android target semantics and bionic ARM64 toolchain')
+        if not (output / 'gen_snapshot').is_file():
+            raise RuntimeError(f'Android AOT compiler missing: {output}')
 
     def build(self, arch: str, mode: str, root: str = None, jobs: int = None):
         root = root or self.root
@@ -220,6 +249,8 @@ class Build:
             for mode in self.mode:
                 self.configure(arch=arch, mode=mode)
                 self.build(arch=arch, mode=mode)
+            for mode in ('profile', 'release'):
+                self.build_android_aot(arch=arch, mode=mode)
             self.debuild(arch=arch, output=self.output(arch))
 
 

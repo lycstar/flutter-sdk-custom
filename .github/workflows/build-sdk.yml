@@ -18,6 +18,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Test build and distribution contracts
+        run: python3 -m unittest discover -s tests -v
+
       - name: Materialise the version directory
         run: |
           test -d "versions/${{ inputs.version }}" || {
@@ -65,6 +68,7 @@ jobs:
           ar x "$deb"
           tar -xf data.tar.*
           cd data/data/com.termux/files/usr/opt
+          python3 "$GITHUB_WORKSPACE/android_artifacts.py" "$PWD/flutter" "$HOME/ftb/flutter"
           tar -cJf "$GITHUB_WORKSPACE/flutter-${{ inputs.version }}-aarch64-linux-android.tar.xz" flutter
 
       - name: Release

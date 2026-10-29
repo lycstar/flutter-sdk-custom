@@ -28,6 +28,18 @@ resumable; set `PROXY=http://...` when a proxy is required), then
 `~/depot_tools` (see `linux-setup.sh`). Materialise `versions/<version>/`
 at the repository root first — the workflow contains the exact commands.
 
+## Android APK support
+
+The distribution supports an Android ARM64 host and Android ARM64 APK targets.
+Release and profile `gen_snapshot` tools are built separately with Android target
+semantics and the bionic Termux toolchain. Linux GTK snapshot generators are not
+reused for Android. Packaging adds the matching official target engine artifacts
+and validates the AArch64 ELF interpreter and target-tool compiler flags before
+publishing. The bundled Flutter cache selects these host tools on Linux ARM64.
+Use `flutter build apk --target-platform android-arm64`; other APK targets are
+not included. CI checks build flags and distribution layout; release APK execution
+still requires an ARM64 Android device test.
+
 ## CI
 
 `.github/workflows/build-sdk.yml` provides a manual `workflow_dispatch`
@@ -67,6 +79,11 @@ sysroot 交叉编译，最后与框架层打包为可在 Android 设备本机运
 `python3 package.py`；宿主前置为 `~/ndk/android-ndk-r27c` 与
 `~/depot_tools`。构建前先将 `versions/<版本>/` 落到仓库根（workflow 中有
 确切命令）。
+
+**Android APK**：仅支持 Android ARM64 宿主和 ARM64 APK。release/profile 的
+`gen_snapshot` 单独按 Android 目标及 bionic 工具链构建，不复用 Linux GTK 版本；
+打包匹配的官方目标引擎，发布前校验 ELF 架构、解释器和编译参数。
+使用 `flutter build apk --target-platform android-arm64`。设备端完整发布构建仍需真机验证。
 
 **CI**：`build-sdk.yml` 提供手动触发的 workflow；引擎编译在免费 runner 上
 需数小时，宿主步骤以本机为基准编写，首跑可能需要校准；校准完成前以本机
