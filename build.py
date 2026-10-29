@@ -157,7 +157,12 @@ class Build:
             'engine/src/flutter/tools/gn',
             '--android' if android_aot else '--linux',
             '--android-cpu' if android_aot else '--linux-cpu', arch,
-            '--enable-fontconfig',
+        ]
+        # txt/BUILD.gn asserts is_linux when fontconfig is on, which --android
+        # violates; gen_snapshot itself never links the fontconfig text stack.
+        if not android_aot:
+            cmd.append('--enable-fontconfig')
+        cmd += [
             '--no-goma',
             '--no-backtrace',
             '--clang',
