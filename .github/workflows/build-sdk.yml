@@ -74,7 +74,8 @@ jobs:
       - name: Release
         uses: ncipollo/release-action@v1
         with:
-          tag: "${{ inputs.version }}"
+          tag: "flutter-${{ inputs.version }}"
+          name: "Flutter ${{ inputs.version }}"
           artifacts: "flutter-${{ inputs.version }}-aarch64-linux-android.tar.xz"
           allowUpdates: true
           replacesArtifacts: true
