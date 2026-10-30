@@ -6,7 +6,7 @@ on:
       version:
         description: "Flutter version (must exist under versions/<version>/)"
         required: true
-        default: "3.47.7"
+        default: "3.47.8"
 
 permissions:
   contents: write
